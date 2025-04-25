@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>バレルジャンプ！</title>
+  <style>
+    canvas {
+      background: #222;
+      display: block;
+      margin: 0 auto;
+    }
+    body {
+      text-align: center;
+      color: white;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <h1>バレルジャンプ！</h1>
+  <canvas id="game" width="400" height="300"></canvas>
+  <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const player = {
+      x: 180,
+      y: 250,
+      width: 20,
+      height: 20,
+      dy: 0,
+      jumping: false
+    };
+
+    const gravity = 0.8;
+    const jumpPower = -12;
+    const barrels = [];
+    let frame = 0;
+    let score = 0;
+    let gameOver = false;
+
+    function drawPlayer() {
+      ctx.fillStyle = 'cyan';
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+    }
+
+    function drawBarrels() {
+      ctx.fillStyle = 'brown';
+      barrels.forEach(barrel => {
+        ctx.beginPath();
+        ctx.arc(barrel.x, barrel.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    function updateBarrels() {
+      if (frame % 60 === 0) {
+        barrels.push({ x: Math.random() * 360 + 20, y: 0 });
+      }
+      barrels.forEach(barrel => {
+        barrel.y += 3;
+        // 衝突判定
+        if (
+          barrel.x > player.x &&
+          barrel.x < player.x + player.width &&
+          barrel.y > player.y &&
+          barrel.y < player.y + player.height
+        ) {
+          gameOver = true;
+        }
+      });
+    }
+
+    function updatePlayer() {
+      player.y += player.dy;
+      player.dy += gravity;
+      if (player.y >= 250) {
+        player.y = 250;
+        player.dy = 0;
+        player.jumping = false;
+      }
+    }
+
+    function drawScore() {
+      ctx.fillStyle = 'white';
+      ctx.fillText(`Score: ${score}`, 10, 20);
+    }
+
+    function gameLoop() {
+      if (gameOver) {
+        ctx.fillStyle = 'red';
+        ctx.fillText('Game Over!', 150, 150);
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawPlayer();
+      drawBarrels();
+      drawScore();
+
+      updatePlayer();
+      updateBarrels();
+
+      score++;
+      frame++;
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft') player.x -= 10;
+      if (e.key === 'ArrowRight') player.x += 10;
+      if (e.key === ' ' && !player.jumping) {
+        player.dy = jumpPower;
+        player.jumping = true;
+      }
+    });
+
+    gameLoop();
+  </script>
+</body>
+</html>
