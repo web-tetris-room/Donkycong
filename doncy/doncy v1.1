@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>マリオ風ジャンプゲーム</title>
+  <style>
+    body {
+      margin: 0;
+      background: black;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #222;
+    }
+  </style>
+</head>
+<body>
+<canvas id="gameCanvas" width="400" height="300"></canvas>
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let state = "title"; // "title", "playing", "gameover"
+let titleMarioY = 180;
+let titleMarioDY = 0;
+let titleJumping = false;
+let titleBgmPlaying = false;
+
+const gravity = 0.5;
+const jumpPower = -10;
+let frame = 0;
+let score = 0;
+let gameOver = false;
+
+const titleMarioImg = new Image();
+titleMarioImg.src = "https://i.imgur.com/BZ9RNSC.png";
+
+const titleBgm = new Audio("https://maou.audio/wp-content/uploads/2021/09/bgm_maoudamashii_8bit03.mp3");
+titleBgm.loop = true;
+
+const playerImage = new Image();
+playerImage.src = "https://i.imgur.com/sX2Q2pB.png"; // 横3コマ
+
+const player = {
+  x: 50,
+  y: 200,
+  width: 20,
+  height: 20,
+  dx: 0,
+  dy: 0,
+  speed: 3,
+  jumping: false,
+  climbing: false,
+  frame: 0,
+  frameTick: 0,
+  facing: 1
+};
+
+const platforms = [
+  { x: 0, y: 280, w: 400, h: 20 },
+  { x: 0, y: 220, w: 300, h: 10 },
+  { x: 100, y: 160, w: 300, h: 10 },
+  { x: 0, y: 100, w: 300, h: 10 }
+];
+
+const ladders = [
+  { x: 280, y: 160, h: 60 },
+  { x: 120, y: 100, h: 60 }
+];
+
+const barrels = [];
+
+function drawPlatforms() {
+  ctx.fillStyle = "#964B00";
+  for (const p of platforms) {
+    ctx.fillRect(p.x, p.y, p.w, p.h);
+  }
+}
+
+function drawLadders() {
+  ctx.fillStyle = "#aaa";
+  for (const l of ladders) {
+    ctx.fillRect(l.x, l.y, 10, l.h);
+  }
+}
+
+function drawPlayer() {
+  const spriteW = 16, spriteH = 16;
+  const spriteX = player.frame * spriteW;
+  ctx.save();
+  ctx.translate(player.x + player.width / 2, player.y);
+  ctx.scale(player.facing, 1);
+  ctx.drawImage(playerImage, spriteX, 0, spriteW, spriteH, -player.width / 2, 0, player.width, player.height);
+  ctx.restore();
+}
+
+function updatePlayer() {
+  player.x += player.dx;
+  player.y += player.dy;
+  player.dy += gravity;
+
+  if (player.dx !== 0) {
+    player.facing = player.dx > 0 ? 1 : -1;
+    player.frameTick++;
+    if (player.frameTick % 10 === 0) {
+      player.frame = (player.frame + 1) % 3;
+    }
+  } else {
+    player.frame = 0;
+    player.frameTick = 0;
+  }
+
+  let onPlatform = false;
+  for (const p of platforms) {
+    if (player.y + player.height <= p.y + 5 && player.y + player.height + player.dy >= p.y && player.x + player.width > p.x && player.x < p.x + p.w) {
+      player.y = p.y - player.height;
+      player.dy = 0;
+      player.jumping = false;
+      onPlatform = true;
+    }
+  }
+  if (!onPlatform && !player.climbing) player.jumping = true;
+}
+
+function drawBarrels() {
+  ctx.fillStyle = "orange";
+  for (const b of barrels) {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function updateBarrels() {
+  for (const b of barrels) {
+    b.dy += gravity;
+    b.y += b.dy;
+    b.x += b.dx;
+
+    for (const p of platforms) {
+      if (b.y + 8 >= p.y && b.y + 8 <= p.y + p.h && b.x >= p.x && b.x <= p.x + p.w) {
+        b.y = p.y - 8;
+        b.dy = 0;
+        b.dx = 1.5;
+      }
+    }
+  }
+}
+
+function checkCollision() {
+  for (const b of barrels) {
+    if (Math.abs(player.x + player.width/2 - b.x) < 12 && Math.abs(player.y + player.height/2 - b.y) < 12) {
+      gameOver = true;
+      state = "gameover";
+    }
+  }
+}
+
+function drawScore() {
+  ctx.fillStyle = "white";
+  ctx.font = "14px sans-serif";
+  ctx.fillText("SCORE: " + score, 10, 20);
+}
+
+function drawTitle() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "white";
+  ctx.font = "28px sans-serif";
+  ctx.fillText("🍄 マリオ風ジャンプゲーム 🍄", 30, 100);
+  ctx.font = "18px sans-serif";
+  ctx.fillText("スペースキーでスタート", 100, 140);
+
+  if (titleMarioImg.complete) {
+    ctx.drawImage(titleMarioImg, 180, titleMarioY, 40, 40);
+  } else {
+    ctx.fillStyle = "cyan";
+    ctx.fillRect(180, titleMarioY, 40, 40);
+  }
+
+  if (titleJumping) {
+    titleMarioDY += 0.6;
+    titleMarioY += titleMarioDY;
+
+    if (titleMarioY > canvas.height) {
+      titleBgm.pause();
+      titleBgm.currentTime = 0;
+      titleBgmPlaying = false;
+      state = "playing";
+      resetGame();
+    }
+  }
+}
+
+function resetGame() {
+  player.x = 50;
+  player.y = 200;
+  player.dx = 0;
+  player.dy = 0;
+  player.jumping = false;
+  player.climbing = false;
+  player.frame = 0;
+  frame = 0;
+  score = 0;
+  barrels.length = 0;
+  gameOver = false;
+  titleMarioY = 180;
+  titleMarioDY = 0;
+  titleJumping = false;
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === " ") {
+    if (state === "title" && !titleJumping) {
+      titleJumping = true;
+      titleMarioDY = -10;
+      if (!titleBgmPlaying) {
+        titleBgm.play();
+        titleBgmPlaying = true;
+      }
+    } else if (state === "gameover") {
+      state = "playing";
+      resetGame();
+    } else if (state === "playing") {
+      if (!player.jumping && !player.climbing) {
+        player.dy = jumpPower;
+        player.jumping = true;
+      }
+    }
+  }
+  if (state !== "playing") return;
+  if (e.key === "ArrowLeft") player.dx = -player.speed;
+  if (e.key === "ArrowRight") player.dx = player.speed;
+  if (e.key === "ArrowUp" && isOnLadder()) {
+    player.climbing = true;
+    player.dy = -2;
+  }
+  if (e.key === "ArrowDown" && isOnLadder()) {
+    player.climbing = true;
+    player.dy = 2;
+  }
+});
+
+document.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0;
+  if ((e.key === "ArrowUp" || e.key === "ArrowDown") && player.climbing) {
+    player.dy = 0;
+    player.climbing = false;
+  }
+});
+
+function isOnLadder() {
+  return ladders.some(l => player.x + player.width > l.x && player.x < l.x + 10 && player.y + player.height > l.y && player.y < l.y + l.h);
+}
+
+function gameLoop() {
+  if (state === "title") {
+    drawTitle();
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+  if (state === "gameover") {
+    ctx.fillStyle = "red";
+    ctx.font = "24px sans-serif";
+    ctx.fillText("Game Over!", 130, 150);
+    ctx.fillText("スペースキーで再スタート", 85, 180);
+    requestAnimationFrame(gameLoop);
+    return;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPlatforms();
+  drawLadders();
+  drawPlayer();
+  drawBarrels();
+  drawScore();
+  updatePlayer();
+  updateBarrels();
+  checkCollision();
+
+  if (frame % 120 === 0) {
+    barrels.push({ x: 30, y: 100, dx: 0, dy: 0 });
+  }
+  frame++;
+  score++;
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
